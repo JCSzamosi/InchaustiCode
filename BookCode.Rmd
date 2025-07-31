@@ -1,0 +1,201 @@
+Inchausti Stats Book
+====================
+
+## Chapter 3
+
+```{r, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+packages.needed<-c("ggplot2","reshape2","gridExtra","mvtnorm","bbmle")
+lapply(packages.needed,FUN=require,character.only=T)
+theme_set(theme_bw())
+```
+
+### Maximum Likelihood Numerical Estimation
+
+`dbinom()` gives the density (i.e. the probability) of the data given the 
+parameters.
+
+```{r}
+dbinom(x = 6, size = 10, prob = 0.5)
+```
+
+We typically look at likelihoods on the log scale:
+
+```{r}
+dbinom(x = 6, size = 10, prob = 0.5, log = TRUE)
+```
+
+Try this for a range of probabilities ranging from 0.001 to 0.999 and put it all
+in a data frame:
+
+```{r}
+DF4 = data.frame(prob = seq(from = 0.001, to = 0.999, by = 0.001))
+```
+
+Create a new version of the `dbinom` function, for some reason
+
+```{r}
+LBinom = function(prob, x, size, log = TRUE){
+  return(dbinom(x = x, size = size, prob = prob, log = log))
+}
+```
+
+Calculate the probability of the observed data for all the values of pi given in
+`DF4`
+
+```{r}
+DF4$Lik = LBinom(prob = DF4$prob, x = 6, size = 10)
+head(DF4)
+```
+
+Plot the log-likelihoods
+
+```{r}
+ll_plt = ggplot(DF4, aes(prob, Lik)) +
+  geom_point() +
+  scale_x_continuous(breaks = seq(0, 1, 0.1))
+ll_plt
+```
+
+Identify the position of the highest likelihood value
+
+```{r}
+which.max(DF4$Lik)
+```
+
+It is the 600th value. Let's pull that row out of the data frame
+
+```{r}
+DF4[which.max(DF4$Lik),]
+```
+
+So out of the 999 probability values we tried, a probability of 0.6 is the one
+that is most likely to produce our observed data.
+
+What if the exact right answer doesn't happen to be in the set we tried? How can 
+we reliably estimate it?
+
+We don't have to do that ourselves. The package `bbmle` has a function, `mle2()`
+to do that for us. Fortunately, I added the `bbmle` package to the set of 
+packages we need for this chapter above.
+
+First we need a function that gives us the _negative_ log likelihood. It will be 
+almost identical to our `LBinom()` function, but multiplies the result by -1.
+
+```{r}
+negL = function(prob, x, size, log = TRUE){
+  -1 * dbinom(x = x, size = size, prob = prob, log = log)
+}
+```
+
+That is the function that `mle2()` wants in order to estimate the ML value:
+
+```{r}
+prob.estimated = mle2(minuslogl = negL, data = list(x = 6, size = 10),
+                      start = list(prob = 0.2))
+summary(prob.estimated)
+```
+
+This gives us the estimate for pi (0.6) as well as its standard error, the 
+z-value test statistic, and its associated p-value in a test of difference from 
+0.
+
+The `confint()` function gives us the confidence interval (95%, two-tailed by 
+default).
+
+```{r}
+confint(prob.estimated)
+```
+
+Let's re-make figure 3.3 from the book. Inchausti skips a lot of steps in 
+talking about this, so let's see if I can bring them back in:
+
+First, we have quietly gone from talking about log-likelihood to _negative_ log 
+likelihood. These are basically the same as each other (negative log-likelihood
+is literally just -1 * log-likelihood), but the convention in this kind of 
+modeling is to use negative (and not always even mention that you're doing 
+that), so let's start there.
+
+log-likelihood curve:
+
+```{r}
+ll_plt
+```
+
+negative log-likelihood curve (I'm also replacing the points with a line):
+
+```{r}
+DF4$negLik = -1 * DF4$Lik
+nll_plt = ggplot(DF4, aes(prob, negLik)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(0, 1, 0.1))
+nll_plt
+```
+
+Now we need to get the **profile** of this curve. This is another way of saying
+its first derivative, or _slope_ at each point:
+
+```{r}
+prof = profile(prob.estimated)
+prof = data.frame(prof)
+p1_plt = ggplot(prof, aes(prob, z)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(0, 1, 0.1))
+p1_plt
+```
+
+Compare this to the negative log-likelihood curve we just looked at:
+
+```{r}
+library(cowplot)
+plot_grid(nll_plt, p1_plt, nrow = 1)
+```
+
+We can see that in the first plot, the slope starts out going down steeply, that
+is to say it is _negative_ (going down) and _large_ (steep). As probability (on
+the x axis) approaches 0.6, the slope gets shallower and shallower (i.e. 
+smaller and smaller, or closer and closer to 0). It's hard to see on the first 
+plot, but when the probability is 0.6, the slope of the negative log-likelihood
+is 0, i.e. the curve is completely horizontal. This is what happens when a curve
+is at a local minimum (or maximum), so that's what we're looking for in a 
+maximum likelihood problem. We want the place where the likelihood is maximized
+(or, equivalently, the negative likelihood is minimized).
+
+Then, as the probability value keeps increasing beyond 0.6, the negative 
+log-likelihood increases (likelihood decreases/parameter value becomes less 
+likely), so the slope is positive. And the slope keeps increasing as you get
+farther from the optimal value.
+
+We can see this reflected in the right-hand "profile" plot, where the value on
+the y axis represents the slope of the left-hand plot at that point on the 
+x axis. So it starts out large and negative, gets smaller and smaller until it
+reaches 0, and then gets larger and larger again, moving away from 0.
+
+For the purposes of a min-max problem like this, all we care about is where the
+slope of that left-hand plot is 0. When it's not 0, we don't care if it's 
+positive or negative. So an easier way to visualize this is to take the absolute
+value of the slope:
+
+```{r}
+p2_plt = ggplot(prof, aes(prob, abs(z))) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(0, 1, 0.1)) +
+  scale_y_continuous(breaks = seq(0, 3.5, 0.5))
+p2_plt
+```
+
+Now we've got something that looks a lot like figure 3.3 in the book. I'm not
+going to draw all the confidence interval lines, but I will put lines at the 
+95% confidence interval values we found above:
+
+```{r}
+ci = confint(prob.estimated)
+p2_plt +
+  geom_vline(xintercept = min(ci),
+             linetype = 2) +
+  geom_vline(xintercept = max(ci),
+             linetype = 2)
+```
+
+I don't want to fight with ggplot to emulate the rest of figure 3.3, but I hope
+this has been helpful in understanding what that figure is telling us.
