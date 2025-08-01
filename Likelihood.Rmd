@@ -2,7 +2,7 @@ Likelihood
 ==========
 
 ```{r include = FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
 library(tidyverse)
 theme_set(theme_bw())
 library(plotly)
@@ -92,15 +92,11 @@ This time it gave me 53. Let's try again.
 rbinom(1, 100, 0.5)
 ```
 
-Now let's do it 10,000 times:
+Now let's do it 10,000 times, and draw a histogram of how often each number
+comes up:
 
 ```{r}
 sim_binom = rbinom(10000, 100, 0.5)
-```
-
-And draw a histogram of how often each number comes up:
-
-```{r}
 sim_5_plt = ggplot(data.frame(sim_binom), aes(sim_binom)) +
   geom_histogram(binwidth = 1, fill = 'goldenrod3') +
   xlim(0, 100) +
@@ -118,8 +114,6 @@ sim_5_plt +
               linewidth = 1)
 ```
 
-That's pretty convincing.
-
 **Takeaway message:** A **probability mass** (or density) **function** (**PMF**)
 is a function that tells us the probability of each possible outcome of a random 
 process.
@@ -133,7 +127,7 @@ In the above section, we only looked at one set of **values** for the
 2. 0.5 probability of heads.
 
 By convention, parameters of probability distributions have names. In the case
-of the binomial distribution, the number of trials is given with $k$, and the
+of the binomial distribution, the number of trials is called $k$, and the
 per-trial probability of heads is $\pi$.
 
 We can change the values of these parameters, within certain constraints, and 
@@ -202,7 +196,7 @@ Instead of faceting these 9 plots, let's combine them together into one 3D graph
 Our vertical axis is still the probability of a given number of heads for a 
 given value of $\pi$, and one horizontal axis is still the number of heads out 
 of 100 tosses, but I'm adding a second horizontal axis, this time for the value
-of pi:
+of $\pi$ (pi):
 
 ```{r}
 pis = seq(0, 1, 0.01)
@@ -286,13 +280,16 @@ function. If we tell it how a coin is weighted, it can tell us with what
 probability we'll see different sets of observations.
 
 In the real world, we're usually dealing with the opposite situation. We already
-have observations, we only have one set of observations, and what we want to
-know is the parameters. 
+have observations -- and we're limited to that set of observations -- and what
+we want to know is the value(s) of the parameters. 
+
+##### Example experiment:
 
 Let's say I have a coin. I flip it 100 times, and count how many of those times
-it comes up heads. I get 64. What I want to know is, what is the weighting of
-the coin? What is the per-toss probability of coming up heads? To put it in the
-vocabulary of our model, what is the most likely value of $\pi$?
+it comes up heads. In this example, I get 64 heads and 36 tails. What I want to
+know is, what is the weighting of the coin? What is the per-toss probability of
+coming up heads? To put it in the vocabulary of our model, what is the most
+likely value of $\pi$?
 
 Let's go back to our full surface of many probability distributions:
 
@@ -330,9 +327,9 @@ _likelihood_ of that parameter being the correct one.
 A **likelihood function**, like a **probability mass function** is a
 **function**. That means it takes values as input, does something to them, and
 produces new values as output. An individual **probability mass function**
-exists for each set of parameter values (here, $\pi$). It takes _potential
-observations_ as input, and outputs the probability of seeing those observations
-for that given value of $\pi$.
+exists for each set of parameter values (here, $\pi$). It takes _observations_
+(real or hypothetical) as input, and outputs the probability of seeing those
+observations for that given value of $\pi$.
 
 An individual **likelihood function** exists for a given set of observations. It
 takes **parameter values** (here, $\pi$) as input and outputs the likelihood of
@@ -341,6 +338,17 @@ that value of $\pi$ being the true value given the observations.
 When we write this in mathematical notation, it looks like this:
 
 $$\mathcal{L}(\pi | D) = P(D | \pi)$$
+
+Here are the pieces, broken down:
+
+* $\mathcal{L}()$: This is the symbol for the likelihood function
+* $P()$: This is the symbol for the probability mass or density function
+* $\pi$: This is short hand for a specific set of parameter values
+* $D$: This is short hand for a specific set of observations (or data)
+* $|$: This is probability notation that means "given" or "conditioned on".
+Values to the right of this symbol are the values that define the specific
+operation function. Values to the left of this symbol are the values the
+function is taking as input
 
 ### Why is it called that tho
 
@@ -354,14 +362,11 @@ when you add them all together, they have to sum to 1. The total probability of
 all the things that could possibly happen has to be 1. This is not true of
 likelihoods. If have a set of observations that are extremely to moderately
 likely under a lot of different parameter values, your likelihood function could
-have a sum < 1. If there are only a few parameter values that could possibly
+have a sum > 1. If there are only a few parameter values that could possibly
 produce your observations, and even then they're pretty unlikely, your
 likelihood could have a sum much smaller than 1. (There are also some
 complications with scale when you're dealing with continuous observations, but
-we're not going to get into that here.) None of that is a problem, though,
-because your observations are your observations, and your likelihoods are giving
-_relative_ information about the plausibility of different parameter values.
-
+we're not going to get into that here.) What this means is that your likelihood function gives only _relative_ information about the plausibility of different sets of parameter values, and can only be interpreted in the context of the other likelihood values produced for that same set of observations.
 
 
 ### A Slightly Annoying Addendum
@@ -458,9 +463,10 @@ ggplot(lik_64, aes(pi, logLik)) +
 
 The negative log-likelihood is the value you are most likely to see. Sometimes
 it is written as "negative log likelihood", sometimes it is written as "-log
-likelihood", and sometimes people just call it the "log likelihood" and forget
-to mention that it's negative. I apologize for that last group. I can't make
-them stop.
+likelihood", and sometimes people just call it the "log likelihood" or even
+"likelihood" and forget to mention that there have been any transformations at
+all. I apologize for that last group, and especially for a fact that I am among
+them. I have tried to avoid it here.
 
 Regardless, the negative log-likelihood is exactly  what it says on the tin.
 Multiply the log likelihood by -1, and you have it:
@@ -501,7 +507,6 @@ Here are the main points I want you to take home from this:
 * **probability mass/density functions** are **functions** that are defined for specific parameter values. They take _observations_ (hypothetical or real) as input, and output the probability of seeing those observations _assuming the parameter values of that specific function_.
   * PMFs/PDFs can only produce values between 0 and 1, and the sum of all the
   values a given PMF/PDF can produce must be 1 
-
 * **likelihood functions** are also **functions**. They are defined for specific
 sets of observations. They take _parameter values_ to their corresponding PMFs
 (or PDFs) as input, and output the likelihood of those parameter values given
@@ -511,11 +516,9 @@ the observations
   value. For this reason, a single likelihood value is meaningless on its own
   and can only be understand in relation to the likelihood values of other
   parameter values for the same set of observations.
-
 * When we talk about likelihoods, we typically put them on the log scale and
 multiply them by -1. People don't always specify that they're doing that, but
 they almost always are.
-
 * A likelihood **profile** is a negative log likelihood scaled by the square root
 of the distance to that function's lowest value. The reasons for this are beyond
 our current scope.
