@@ -1,0 +1,521 @@
+Likelihood
+==========
+
+```{r include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+theme_set(theme_bw())
+library(plotly)
+```
+
+(To see the code that generates this document, click [here](./Likelihood.Rmd).)
+
+What is a likelihood function?
+
+Likelihood is typically defined in terms of data and model parameters. The
+(correct) definition you'll see in most textbooks is "the likelihood of the
+parameters given the data is equal to the probability of the data given the 
+parameters."
+
+But what does this mean?
+
+### Probability Mass Functions
+
+First, let's talk about probability.
+
+Imagine a coin. This coin is fair, which means the chance of it coming up heads
+is 50%, or 0.5. If we toss this coin 100 times, we could conceivably get 
+anywhere from 0 to 100 heads, but intuitively, we know some outcomes are more 
+likely than others. If the coin is fair, our chances of actually getting 0 heads
+(or 1, or 99 or 100) are pretty low. Our chances of getting 50 heads are 
+pretty high, but so are our chances of getting 49 or 51 or 48 or 52. The closer 
+we are to 50, the higher the chance of getting that number of heads.
+
+The **binomial distribution** is the function that tells us what the chance of
+each individual outcome is. This type of function is called a **probability mass
+function** (or **probability density function** if our outcome is continuous).
+
+It's called this because it tells us the **mass** or _amount_ of probability (on
+the y axis) at each possible outcome (on the x axis).
+
+Let's see what it says about our fair coin:
+
+```{r}
+# Use the dbinom function to get the probability of each value from 0 to 100
+probs = dbinom(seq(0, 100, 1), 100, 0.5)
+
+# Put that in a data frame with the number of successes and the weightedness of 
+# the coin
+binom_df = data.frame(heads = seq(0, 100, 1),
+                      mass50 = probs,
+                      pi = 0.5)
+
+ggplot(binom_df, aes(heads, mass50)) +
+  geom_line(linewidth = 1) + 
+  xlab('# of times the coin could come up heads in 100 trials') +
+  ylab('Probability of each number of heads in 100 trials')
+```
+
+What we have here is a **model** (the binomial distribution). This model has two
+**parameters**
+
+1. The number of coin tosses
+2. The probability of heads on any given toss
+
+Here those parameters have values of 100 and 0.5, respectively. This model, as
+we've discussed, is a _data-generating function_. If you simulate with it, it
+will produce a certain outcome (number of heads) with a certain probability. So,
+if we simulate from this model many times, and graph how often each number of 
+heads comes up, we should get a graph very similar to the one above. Let's try
+it.
+
+First, let's simulate once:
+
+```{r, include=FALSE}
+set.seed(4)
+```
+```{r}
+rbinom(1, 100, 0.5)
+```
+
+I asked for one number, one value out of 100 for the number of times heads will
+come up in 100 tosses, and it gave me 47. That's a pretty reasonable number,
+but it didn't have to be that one. Let's try it again:
+
+```{r}
+rbinom(1, 100, 0.5)
+```
+
+This time it gave me 53. Let's try again.
+
+```{r}
+rbinom(1, 100, 0.5)
+```
+
+Now let's do it 10,000 times:
+
+```{r}
+sim_binom = rbinom(10000, 100, 0.5)
+```
+
+And draw a histogram of how often each number comes up:
+
+```{r}
+sim_5_plt = ggplot(data.frame(sim_binom), aes(sim_binom)) +
+  geom_histogram(binwidth = 1, fill = 'goldenrod3') +
+  xlim(0, 100) +
+  xlab('# of heads in a trial') +
+  ylab('# of times each # of heads came up')
+sim_5_plt
+```
+
+Let's superimpose our probability plot from before, multiplying the y axis by
+10,000 to convert from probabilities to expected counts:
+
+```{r}
+sim_5_plt +
+  geom_line(data = binom_df, aes(x = heads, y = mass50*10000),
+              linewidth = 1)
+```
+
+That's pretty convincing.
+
+**Takeaway message:** A **probability mass** (or density) **function** (**PMF**)
+is a function that tells us the probability of each possible outcome of a random 
+process.
+
+### Playing with Parameters
+
+In the above section, we only looked at one set of **values** for the
+**parameters** of our binomial distribution:
+
+1. 100 trials
+2. 0.5 probability of heads.
+
+By convention, parameters of probability distributions have names. In the case
+of the binomial distribution, the number of trials is given with $k$, and the
+per-trial probability of heads is $\pi$.
+
+We can change the values of these parameters, within certain constraints, and 
+get different PMFs with slightly (or radically) different shapes. For now, we'll
+leave the number of trials ($k$) alone, and only worry about the probability of
+the coin coming up heads ($\pi$). That probability can be any value between 0
+and 1. So let's see what happens as it changes.
+
+Here we have the PMF when $\pi = 0.1$:
+
+```{r}
+binom_df = (binom_df
+            %>% mutate(mass10 = dbinom(heads, 100, 0.1)))
+ggplot(binom_df, aes(heads, mass10)) +
+  geom_line(linewidth = 1) +
+  xlab('# of times the coin could come up heads in 100 trials') +
+  ylab('Probability of each number of heads in 100 trials')
+```
+
+Here it is for $\pi = 0.7$:
+
+```{r}
+binom_df = (binom_df
+            %>% mutate(mass70 = dbinom(heads, 100, 0.7)))
+ggplot(binom_df, aes(heads, mass70)) +
+  geom_line(linewidth = 1) +
+  xlab('# of times the coin could come up heads in 100 trials') +
+  ylab('Probability of each number of heads in 100 trials')
+```
+
+Here are 9 different binomial PMFs for 9 different values of $\pi$:
+
+```{r}
+heads = seq(0, 100, 1)
+pis = seq(0.1, 0.9, 0.1)
+tst = matrix(ncol = 3, nrow = length(heads) * length(pis))
+tst = data.frame(tst)
+colnames(tst) = c('heads', 'mass', 'pi')
+for (i in 1:length(pis)){
+  pi = pis[i]
+  mass = dbinom(heads, 100, pi)
+  rstart = (i-1)*100 + i
+  rend = rstart + 100
+  tst[rstart:rend,'mass'] = mass
+  tst[rstart:rend, 'heads'] = heads
+  tst[rstart:rend, 'pi'] = pi
+}
+
+long_df = tst
+
+pi_9 = ggplot(long_df, aes(heads, mass)) +
+  geom_line(linewidth = 1) +
+  xlab('# of times the coin could come up heads in 100 trials') +
+  ylab('Probability of each number of heads in 100 trials') +
+  facet_wrap(~pi)
+pi_9
+```
+
+We can see that the bulk of the distribution moves smoothly from left to right
+as the probability of a coin coming up heads increases.
+
+### Sneaking Up On Likelihood
+
+Instead of faceting these 9 plots, let's combine them together into one 3D graph.
+
+Our vertical axis is still the probability of a given number of heads for a 
+given value of $\pi$, and one horizontal axis is still the number of heads out 
+of 100 tosses, but I'm adding a second horizontal axis, this time for the value
+of pi:
+
+```{r}
+pis = seq(0, 1, 0.01)
+tst = matrix(ncol = 3, nrow = length(heads) * length(pis))
+tst = data.frame(tst)
+colnames(tst) = c('heads', 'mass', 'pi')
+for (i in 1:length(pis)){
+  pi = pis[i]
+  mass = dbinom(heads, 100, pi)
+  rstart = (i-1)*100 + i
+  rend = rstart + 100
+  tst[rstart:rend,'mass'] = mass
+  tst[rstart:rend, 'heads'] = heads
+  tst[rstart:rend, 'pi'] = pi
+}
+full_binom = tst
+mass_mat = (full_binom
+            %>% pivot_wider(names_from = pi, values_from = mass)
+            %>% select(-heads)
+            %>% as.matrix())
+rownames(mass_mat) = as.character(heads)
+
+pi_sparse = seq(0.1, 0.9, 0.1)
+tst = c()
+for (pi in pi_sparse){
+  tst = c(tst, seq(pi - 0.01, pi + 0.01, 0.01))
+}
+pi_sparse = as.character(tst)
+mass_sparse = mass_mat
+mass_sparse[,!colnames(mass_sparse) %in% pi_sparse] = NA
+plot_ly() %>%
+  add_surface(x = unique(full_binom$pi), 
+              y = unique(full_binom$heads),
+              z = mass_sparse) %>%
+  layout(scene = list(xaxis = list(title = 'pi (coin weight)'),
+                      yaxis = list(title = '# heads in 100 tosses'),
+                      zaxis = list(title = 'probability of that many heads')))
+```
+
+
+You can drag that graph around to look at it from different angles!
+
+Now, let's fill in the graph by adding a bunch of different values for $\pi$
+between 0 and 1:
+
+```{r}
+surf_full = plot_ly() %>%
+  add_surface(x = unique(full_binom$pi), 
+              y = unique(full_binom$heads),
+              z = mass_mat) %>%
+  layout(scene = list(xaxis = list(title = 'pi (coin weight)'),
+                      yaxis = list(title = '# heads in 100 tosses'),
+                      zaxis = list(title = 'probability of that many heads')))
+surf_full
+```
+
+Now I have a surface that shows me, for any given value of $\pi$, how likely is
+a given number of heads.
+
+Each of our PMF plots above can be thought of as the cross-section of a slice 
+through this surface. The plot we started with, where the coin is fair, is a
+slice through the plot at $\pi = 0.5$, so let's view it in that context:
+
+```{r}
+mass_5 = mass_mat
+mass_5[,!colnames(mass_5) %in% as.character(c(0.49,0.5,0.51))] = NA
+plot_ly() %>%
+  add_surface(x = unique(full_binom$pi),
+              y = unique(full_binom$heads),
+              z = mass_5) %>%
+  layout(scene = list(xaxis = list(title = 'pi (coin weight)',
+                                   range = c(0,1)),
+                      yaxis = list(title = '# heads in 100 tosses'),
+                      zaxis = list(title = 'probability of that many heads')))
+```
+
+#### Experiments are like doing this backwards
+
+So far, we have talked about the binomial distribution as a data-generating
+function. If we tell it how a coin is weighted, it can tell us with what
+probability we'll see different sets of observations.
+
+In the real world, we're usually dealing with the opposite situation. We already
+have observations, we only have one set of observations, and what we want to
+know is the parameters. 
+
+Let's say I have a coin. I flip it 100 times, and count how many of those times
+it comes up heads. I get 64. What I want to know is, what is the weighting of
+the coin? What is the per-toss probability of coming up heads? To put it in the
+vocabulary of our model, what is the most likely value of $\pi$?
+
+Let's go back to our full surface of many probability distributions:
+
+```{r}
+surf_full
+```
+
+Previously, we sliced through this surface at the place where $\pi = 0.5$, and
+allowed the number of heads to vary from 0 to 100 to see the probabilities.
+
+Now, I'm going to slice through this surface at the place where # of heads equals 64, and allow $\pi$ to vary from 0 to 1:
+
+```{r}
+mass_64 = mass_mat
+mass_64[!rownames(mass_64) %in% c('63','64','65'),] = NA
+plot_ly() %>%
+  add_surface(x = unique(full_binom$pi),
+              y = unique(full_binom$heads),
+              z = mass_64) %>%
+  layout(scene = list(xaxis = list(title = 'pi (coin weight)',
+                                   range = c(0,1)),
+                      yaxis = list(title = '# heads in 100 tosses',
+                                   range = c(0,100)),
+                      zaxis = list(title = 'probability of that many heads')))
+```
+
+_This_ is our model's likelihood function. For every possible value of $\pi$
+between 0 and 1, the value of the likelihood function is that $\pi$'s PMF's
+probability of producing 64 heads and 36 tails. This is what we mean when we say
+"the likelihood of the parameters given the data is equal to the probability of
+the data given the parameters." For each parameter value under consideration,
+its PMF's probability of producing our observation is the likelihood function's
+_likelihood_ of that parameter being the correct one.
+
+A **likelihood function**, like a **probability mass function** is a
+**function**. That means it takes values as input, does something to them, and
+produces new values as output. An individual **probability mass function**
+exists for each set of parameter values (here, $\pi$). It takes _potential
+observations_ as input, and outputs the probability of seeing those observations
+for that given value of $\pi$.
+
+An individual **likelihood function** exists for a given set of observations. It
+takes **parameter values** (here, $\pi$) as input and outputs the likelihood of
+that value of $\pi$ being the true value given the observations.
+
+When we write this in mathematical notation, it looks like this:
+
+$$\mathcal{L}(\pi | D) = P(D | \pi)$$
+
+### Why is it called that tho
+
+Okay, so if every number that a likelihood function outputs is a probability,
+why don't we call it a probability function? Why do we have a different word for
+it?
+
+Probabilities have very specific properties. One is that they have to fall
+between 0 and 1. The likelihood also has this property. But another is that,
+when you add them all together, they have to sum to 1. The total probability of
+all the things that could possibly happen has to be 1. This is not true of
+likelihoods. If have a set of observations that are extremely to moderately
+likely under a lot of different parameter values, your likelihood function could
+have a sum < 1. If there are only a few parameter values that could possibly
+produce your observations, and even then they're pretty unlikely, your
+likelihood could have a sum much smaller than 1. (There are also some
+complications with scale when you're dealing with continuous observations, but
+we're not going to get into that here.) None of that is a problem, though,
+because your observations are your observations, and your likelihoods are giving
+_relative_ information about the plausibility of different parameter values.
+
+
+
+### A Slightly Annoying Addendum
+
+So far we've talked about and looked at probabilities and likelihoods on a linear scale. That means the shapes have been familiar, and easy to think about. But that's not typically how they are represented or discussed in statistics. Here, we'll step through the transformations we typically subject likelihoods to:
+
+
+#### Log Likelihood.
+
+Likelihoods are always between 0 and 1, and can get extremely small. For that reason, it's often simpler to look at them on the log scale.
+
+Let's start, again, with our PMF:
+
+Here is the binomial distribution's PMF when $\pi = 0.7$:
+
+```{r}
+pi_70 = ggplot(filter(full_binom, pi == '0.7'), aes(heads, mass)) +
+  geom_line(linewidth = 1)
+pi_70
+```
+
+And here is that same plot with the y axis on the log scale:
+
+```{r}
+pi_70 + scale_y_log10()
+```
+
+This allows us to see the variation far from the mode that is undetectable in
+the first plot.
+
+Here is our 3D plot of the entire likelihood surface (all the values of $\pi$ together in one plot):
+
+```{r}
+surf_full
+```
+
+And here it is again with the y-axis log-scaled
+
+```{r}
+mass_log = log(mass_mat)
+mass_log[is.infinite(mass_log)] = NA
+plot_ly() %>%
+  add_surface(x = unique(full_binom$pi), 
+              y = unique(full_binom$heads),
+              z = mass_log) %>%
+  layout(scene = list(xaxis = list(title = 'pi (coin weight)'),
+                      yaxis = list(title = '# heads in 100 tosses'),
+                      zaxis = list(title = 'probability of that many heads')))
+```
+
+And here is our likelihood curve for just 64 heads again:
+
+```{r}
+plot_ly() %>%
+  add_surface(x = unique(full_binom$pi),
+              y = unique(full_binom$heads),
+              z = mass_64) %>%
+  layout(scene = list(xaxis = list(title = 'pi (coin weight)',
+                                   range = c(0,1)),
+                      yaxis = list(title = '# heads in 100 tosses',
+                                   range = c(0,100)),
+                      zaxis = list(title = 'probability of that many heads')))
+```
+
+And here it is on the log scale:
+
+```{r}
+mass_l_64 = mass_log
+mass_l_64[!rownames(mass_l_64) %in% c('63','64','65'),] = NA
+plot_ly() %>%
+  add_surface(x = unique(full_binom$pi),
+              y = unique(full_binom$heads),
+              z = mass_l_64) %>%
+  layout(scene = list(xaxis = list(title = 'pi (coin weight)',
+                                   range = c(0,1)),
+                      yaxis = list(title = '# heads in 100 tosses',
+                                   range = c(0,100)),
+                      zaxis = list(title = 'probability of that many heads')))
+```
+
+Since this is a 2D plot, let's go back to 2 axes. Here is that exact same plot,
+but flat:
+
+```{r}
+lik_64 = filter(full_binom, heads == 64, ! pi %in% c(0,1))
+lik_64 = (lik_64
+          %>% mutate(logLik = log(mass)))
+ggplot(lik_64, aes(pi, logLik)) +
+  geom_line(linewidth = 1) 
+```
+
+
+#### Negative log likelihood
+
+The negative log-likelihood is the value you are most likely to see. Sometimes
+it is written as "negative log likelihood", sometimes it is written as "-log
+likelihood", and sometimes people just call it the "log likelihood" and forget
+to mention that it's negative. I apologize for that last group. I can't make
+them stop.
+
+Regardless, the negative log-likelihood is exactly  what it says on the tin.
+Multiply the log likelihood by -1, and you have it:
+
+```{r}
+lik_64 = (lik_64
+          %>% mutate(negLogLik = -1 * logLik))
+ggplot(lik_64, aes(pi, negLogLik)) +
+  geom_line(linewidth = 1)
+```
+
+#### Negative Log Likelihood Profile
+
+This one is slightly more complicated: 
+
+To get the negative log likelihood profile, take each value from the negative
+log likelihood, subtract from it the smallest value, and then take the square
+root of the difference. The reason to do this is moderately complicated, but it
+has to do with making confidence intervals behave correctly. Here is what it
+looks like:
+
+```{r}
+prof_fun = function(x){
+  return(y = sqrt(x - min(x)))
+}
+
+lik_64 = (lik_64
+          %>% mutate(prof = prof_fun(negLogLik)))
+
+ggplot(lik_64, aes(pi, prof)) +
+  geom_line(linewidth = 1)
+```
+
+### Summary
+
+Here are the main points I want you to take home from this:
+
+* **probability mass/density functions** are **functions** that are defined for specific parameter values. They take _observations_ (hypothetical or real) as input, and output the probability of seeing those observations _assuming the parameter values of that specific function_.
+  * PMFs/PDFs can only produce values between 0 and 1, and the sum of all the
+  values a given PMF/PDF can produce must be 1 
+
+* **likelihood functions** are also **functions**. They are defined for specific
+sets of observations. They take _parameter values_ to their corresponding PMFs
+(or PDFs) as input, and output the likelihood of those parameter values given
+the observations
+  * Likelihood functions can only produce values between 0 and 1, but the sum of
+  all the values a given likelihood function produces can be any non-negative
+  value. For this reason, a single likelihood value is meaningless on its own
+  and can only be understand in relation to the likelihood values of other
+  parameter values for the same set of observations.
+
+* When we talk about likelihoods, we typically put them on the log scale and
+multiply them by -1. People don't always specify that they're doing that, but
+they almost always are.
+
+* A likelihood **profile** is a negative log likelihood scaled by the square root
+of the distance to that function's lowest value. The reasons for this are beyond
+our current scope.
