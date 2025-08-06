@@ -109,3 +109,87 @@ confint(prob.estimated)
 
 Let's re-make figure 3.3 from the book. Inchausti skips a lot of steps in 
 talking about this, so let's see if I can bring them back in:
+
+Step 1 is to take the negative log likelihood. As I explain in my [likelihood 
+page](./Likelihood.html), this is accomplished by multiplying the likelihood by
+-1:
+
+```{r}
+DF4$negLik = -1 * DF4$Lik
+```
+
+If we plot that, we get the same plot, but inverted:
+
+```{r}
+nll_plt = ggplot(DF4, aes(prob, negLik)) +
+  geom_point() +
+  scale_x_continuous(breaks = seq(0, 1, 0.1))
+nll_plt
+```
+
+The next step is to convert this to what is called a "likelihood profile". This
+is accomplished by normalizing to the minimum value (i.e. subtracting the 
+minimum value from everything) and then taking the square root. The reasons for 
+this are complicated, but have to do with making the confidence interval work
+correctly.
+
+Here is a function to do that:
+
+```{r}
+lik_prof = function(x){
+  p = x - min(x)
+  p = sqrt(p)
+  return(p)
+}
+```
+
+Let's add it to the data frame and plot it:
+
+```{r}
+DF4$profLik = lik_prof(DF4$negLik)
+pll_plt = ggplot(DF4, aes(prob, profLik)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(0, 1, 0.1))
+pll_plt
+```
+
+And add the lines indicating the confidence intervals
+
+```{r}
+ci = confint(prob.estimated)
+# Get the bottom of the confidence interval
+low_ci = min(ci)
+# Get the top of the confidence interval
+hi_ci = max(ci)
+
+# Get the negative log likelihood at the bottom of the CI and normalize to the
+# minimum likelihood
+low_lik = negL(low_ci, 6, 10) - min(DF4$negLik)
+# Get the negative log likelihood at the top of the CI and normalize to the 
+# minimum likelihood
+hi_lik = negL(hi_ci, 6, 10) - min(DF4$negLik)
+
+# Add the CI to the plot, taking the square root of the negative log likelihood
+pll_plt = pll_plt +
+  geom_segment(x = low_ci, xend = low_ci, y = 0, yend = sqrt(low_lik),
+               linetype = 2) +
+  geom_segment(x = hi_ci, xend = hi_ci, y = 0, yend = sqrt(hi_lik),
+               linetype = 2) +
+  geom_segment(x = low_ci, xend = hi_ci, y = sqrt(low_lik), yend = sqrt(hi_lik),
+               linetype = 2)
+pll_plt
+```
+
+Ichausti appears to be limiting the plot to the range 0.2 - 0.9 on the x-axis.
+
+I don't know why he's doing that, but let's do it here:
+
+```{r}
+pll_plt + 
+  ylim(0, 2.5) + 
+  scale_x_continuous(breaks = seq(0.2, 0.9, 0.1), limits = c(0.2, 0.9))
+```
+
+This plot has the same shape as Inchausti's, but the y-axis is on a different 
+scale. I will be honest, I have no idea why. I would but even odds on whether he
+or I made a mistake.
